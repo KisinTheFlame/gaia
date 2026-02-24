@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=gaia
+      - POSTGRES_USER=gaia
+      - POSTGRES_PASSWORD=gaia
+    volumes:
+      - gaia-postgres-data:/var/lib/postgresql/data
+    networks:
+      - axis
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gaia -d gaia"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  gaia-config-center:
+    image: gaia-config-center:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "33000:33000"
+    environment:
+      - PORT=33000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=gaia
+      - DB_USER=gaia
+      - DB_PASSWORD=gaia
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - axis
+    restart: unless-stopped
+
+volumes:
+  gaia-postgres-data:
+
+networks:
+  axis:
+    external: true
