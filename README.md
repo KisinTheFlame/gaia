@@ -1,46 +1,97 @@
-# Gaia Config Center MVP
+# Gaia Config Center Monorepo
 
-This service exposes 3 HTTP APIs:
+Gaia 现已改造为 `pnpm` monorepo，包含服务端、共享协议包和 SDK。
+
+## Workspace 结构
+
+- `apps/server` -> `@kisintheflame/gaia-server`（私有，配置中心服务）
+- `packages/shared` -> `@kisintheflame/gaia-shared`（Zod 协议与类型）
+- `packages/client` -> `@kisintheflame/gaia-client`（Node ESM SDK）
+
+## 本地开发
+
+```bash
+pnpm install
+pnpm dev
+```
+
+常用命令：
+
+```bash
+pnpm build
+pnpm typecheck
+pnpm lint
+pnpm format:check
+```
+
+## 服务端 API
 
 - `GET /get?key=<key>`
-- `POST /set` with JSON body: `{"key":"<key>","value":"<value>"}`
+- `POST /set` body: `{"key":"<key>","value":"<value>"}`
 - `DELETE /delete?key=<key>`
 
-Persistent data is stored in PostgreSQL.
+## SDK 使用（@kisintheflame/gaia-client）
 
-## Build image
+先在业务项目根目录准备 `gaia.config.yml`：
+
+```yaml
+baseUrl: http://localhost:33000
+```
+
+示例：
+
+```ts
+import {
+  deleteConfig,
+  getConfig,
+  initializeGaiaClient,
+  setConfig,
+} from "@kisintheflame/gaia-client";
+
+await initializeGaiaClient();
+await setConfig("demo", "v1");
+const got = await getConfig("demo");
+await deleteConfig("demo");
+console.log(got.value);
+```
+
+SDK 规则：
+
+- 必须先调用 `initializeGaiaClient()`
+- 默认读取 `process.cwd()/gaia.config.yml`
+- 入参和响应都做 Zod 校验
+- 错误统一抛 `GaiaClientError`
+
+## Docker
+
+构建镜像：
 
 ```bash
 docker build -t gaia-config-center:latest .
 ```
 
-## Run with Docker Compose
+启动 compose：
 
 ```bash
 docker compose up -d --build
 ```
 
-Services in compose:
+服务：
 
-- `postgres` (`postgres:16-alpine`) with volume `gaia-postgres-data`
-- `gaia-config-center` on host `33000`
+- `postgres` (`postgres:16-alpine`)
+- `gaia-config-center`（对外端口 `33000`）
 
-Database env defaults (already configured in compose):
+## GitHub Packages
 
-- `DB_HOST=postgres`
-- `DB_PORT=5432`
-- `DB_NAME=gaia`
-- `DB_USER=gaia`
-- `DB_PASSWORD=gaia`
+scope：`@kisintheflame`
 
-## API examples
+仓库 `.npmrc` 已设置：
 
-```bash
-curl -X POST http://localhost:33000/set \
-  -H "Content-Type: application/json" \
-  -d '{"key":"demo","value":"v1"}'
-
-curl "http://localhost:33000/get?key=demo"
-
-curl -X DELETE "http://localhost:33000/delete?key=demo"
+```ini
+@kisintheflame:registry=https://npm.pkg.github.com
 ```
+
+发布 workflow：`.github/workflows/publish-packages.yml`
+
+- 触发：推送 `v*` tag
+- 发布包：`@kisintheflame/gaia-shared`、`@kisintheflame/gaia-client`

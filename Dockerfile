@@ -1,32 +1,32 @@
-ARG NODE_IMAGE=node:22-alpine
-FROM ${NODE_IMAGE} AS builder
+FROM node:22-alpine AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 
-USER root
-WORKDIR /app
-ENV NODE_ENV=development
-
-COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY tsconfig.json ./
-COPY src ./src
-RUN npm run build
-
-ARG NODE_IMAGE=node:22-alpine
-FROM ${NODE_IMAGE} AS runner
-
-USER root
+FROM base AS build
 WORKDIR /app
 
-ENV NODE_ENV=production
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json .npmrc ./
+COPY apps/server/package.json apps/server/package.json
+COPY packages/shared/package.json packages/shared/package.json
+COPY packages/client/package.json packages/client/package.json
+
+RUN pnpm install --frozen-lockfile
+
+COPY apps/server ./apps/server
+COPY packages/shared ./packages/shared
+COPY packages/client ./packages/client
+
+RUN pnpm --filter @kisintheflame/gaia-shared build
+RUN pnpm --filter @kisintheflame/gaia-server build
+RUN pnpm --filter @kisintheflame/gaia-server deploy --prod --legacy /prod/server
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV="production"
 ENV PORT=3000
 
-COPY --from=builder /app/dist ./dist
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-
-USER node
+COPY --from=build /prod/server ./
 
 EXPOSE 3000
-
 CMD ["node", "dist/index.js"]

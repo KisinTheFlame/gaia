@@ -1,0 +1,55 @@
+name: Publish Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+          scope: "@kisintheflame"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Sync package versions from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          pnpm --filter @kisintheflame/gaia-shared version "$VERSION" --no-git-tag-version
+          pnpm --filter @kisintheflame/gaia-client version "$VERSION" --no-git-tag-version
+          pnpm --filter @kisintheflame/gaia-client pkg set "dependencies.@kisintheflame/gaia-shared=$VERSION"
+
+      - name: Build shared and client
+        run: |
+          pnpm --filter @kisintheflame/gaia-shared build
+          pnpm --filter @kisintheflame/gaia-client build
+
+      - name: Publish shared
+        run: pnpm --filter @kisintheflame/gaia-shared publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish client
+        run: pnpm --filter @kisintheflame/gaia-client publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
