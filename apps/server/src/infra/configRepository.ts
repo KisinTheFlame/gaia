@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { desc, eq, ilike, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
@@ -8,8 +8,28 @@ export interface ConfigRepository {
   ensureSchema(retries: number, retryDelayMs: number): Promise<void>;
   close(): Promise<void>;
   getConfig(key: string): Promise<string | null>;
+  listConfigs(input: ListConfigsQuery): Promise<ListConfigsPage>;
   setConfig(key: string, value: string): Promise<void>;
   deleteConfig(key: string): Promise<string | null>;
+}
+
+export interface ListConfigsQuery {
+  query: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface StoredConfigListItem {
+  key: string;
+  value: string;
+  updatedAt: Date;
+}
+
+export interface ListConfigsPage {
+  items: StoredConfigListItem[];
+  page: number;
+  pageSize: number;
+  total: number;
 }
 
 export interface PgConfigConnection {
@@ -61,6 +81,38 @@ export class PgConfigRepository implements ConfigRepository {
       .where(eq(configs.key, key))
       .limit(1);
     return rows[0]?.value ?? null;
+  }
+
+  async listConfigs(input: ListConfigsQuery): Promise<ListConfigsPage> {
+    const offset = (input.page - 1) * input.pageSize;
+    const filter = input.query.length > 0 ? ilike(configs.key, `%${input.query}%`) : undefined;
+
+    const [items, totalRows] = await Promise.all([
+      this.db
+        .select({
+          key: configs.key,
+          value: configs.value,
+          updatedAt: configs.updatedAt,
+        })
+        .from(configs)
+        .where(filter)
+        .orderBy(desc(configs.updatedAt))
+        .limit(input.pageSize)
+        .offset(offset),
+      this.db
+        .select({
+          count: sql<number>`count(*)`.mapWith(Number),
+        })
+        .from(configs)
+        .where(filter),
+    ]);
+
+    return {
+      items,
+      page: input.page,
+      pageSize: input.pageSize,
+      total: totalRows[0]?.count ?? 0,
+    };
   }
 
   async setConfig(key: string, value: string): Promise<void> {

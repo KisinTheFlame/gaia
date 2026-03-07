@@ -4,6 +4,8 @@ import {
   DeleteConfigResponseSchema,
   ErrorResponseSchema,
   GetConfigQuerySchema,
+  ListConfigsQuerySchema,
+  ListConfigsResponseSchema,
   SetConfigRequestSchema,
 } from "@kisintheflame/gaia-shared";
 import Fastify, { type FastifyReply } from "fastify";
@@ -13,6 +15,22 @@ import type { ConfigService } from "../service/configService.js";
 
 export function createApp(configService: ConfigService) {
   const app = Fastify();
+
+  app.get("/configs", async (request, reply) => {
+    const queryResult = ListConfigsQuerySchema.safeParse(request.query);
+    if (!queryResult.success) {
+      sendValidatedJson(reply, 400, ErrorResponseSchema, { error: "分页参数不合法" });
+      return;
+    }
+
+    try {
+      const result = await configService.listConfigs(queryResult.data);
+      sendValidatedJson(reply, 200, ListConfigsResponseSchema, result);
+    } catch (error) {
+      request.log.error({ error }, "读取配置列表失败");
+      sendValidatedJson(reply, 500, ErrorResponseSchema, { error: "读取配置列表失败" });
+    }
+  });
 
   app.get("/get", async (request, reply) => {
     const queryResult = GetConfigQuerySchema.safeParse(request.query);

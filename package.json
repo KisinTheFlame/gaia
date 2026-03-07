@@ -4,9 +4,12 @@
   "version": "0.1.0",
   "packageManager": "pnpm@10.18.3",
   "scripts": {
-    "dev": "pnpm --filter @kisintheflame/gaia-shared build && pnpm --filter @kisintheflame/gaia-server dev",
+    "dev": "pnpm dev:server",
+    "dev:server": "pnpm --filter @kisintheflame/gaia-shared build && pnpm --filter @kisintheflame/gaia-server dev",
+    "dev:web": "pnpm --filter @kisintheflame/gaia-shared build && pnpm --filter @kisintheflame/gaia-web dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --if-present test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",

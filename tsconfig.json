@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/shared" },
     { "path": "./packages/client" },
-    { "path": "./apps/server" }
+    { "path": "./apps/server" },
+    { "path": "./apps/web" }
   ]
 }

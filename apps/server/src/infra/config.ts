@@ -11,7 +11,7 @@ export interface AppConfig {
 
 export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
-    port: Number(env.PORT ?? 3000),
+    port: Number(env.PORT ?? 20005),
     dbHost: env.DB_HOST ?? "localhost",
     dbPort: Number(env.DB_PORT ?? 5432),
     dbName: env.DB_NAME ?? "gaia",

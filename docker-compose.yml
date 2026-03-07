@@ -20,11 +20,11 @@ services:
     image: gaia-config-center:latest
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: apps/server/Dockerfile
     ports:
-      - "33000:33000"
+      - "20005:20005"
     environment:
-      - PORT=33000
+      - PORT=20005
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=gaia
@@ -33,6 +33,19 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - axis
+    restart: unless-stopped
+
+  gaia-web:
+    image: gaia-web:latest
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "20006:80"
+    depends_on:
+      - gaia-config-center
     networks:
       - axis
     restart: unless-stopped
