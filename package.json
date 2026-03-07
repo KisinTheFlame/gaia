@@ -4,16 +4,19 @@
   "version": "0.1.0",
   "packageManager": "pnpm@10.18.3",
   "scripts": {
-    "dev": "pnpm dev:server",
-    "dev:server": "pnpm --filter @kisintheflame/gaia-shared build && pnpm --filter @kisintheflame/gaia-server dev",
-    "dev:web": "pnpm --filter @kisintheflame/gaia-shared build && pnpm --filter @kisintheflame/gaia-web dev",
     "build": "pnpm -r build",
+    "app:deploy": "bash ./scripts/deploy.sh",
+    "db:migrate:dev": "bash ./scripts/prisma-docker.sh migrate dev",
+    "db:migrate:deploy": "bash ./scripts/prisma-docker.sh migrate deploy",
+    "db:migrate:status": "bash ./scripts/prisma-docker.sh migrate status",
+    "db:migrate:reset": "bash ./scripts/prisma-docker.sh migrate reset",
+    "db:migrate:resolve": "bash ./scripts/prisma-docker.sh migrate resolve",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r --if-present test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier . --write",
-    "format:check": "prettier . --check"
+    "format": "prettier . --check",
+    "format:write": "prettier . --write"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -14,7 +14,7 @@ class InMemoryConfigRepository implements ConfigRepository {
     private readonly entries: Array<{ key: string; value: string; updatedAt: Date }> = [],
   ) {}
 
-  ensureSchema(): Promise<void> {
+  waitUntilReady(): Promise<void> {
     return Promise.resolve();
   }
 

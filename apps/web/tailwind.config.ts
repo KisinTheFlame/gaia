@@ -1,18 +1,18 @@
+import tailwindcssAnimate from "tailwindcss-animate";
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: ["class"],
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
-      fontFamily: {
-        sans: ['"IBM Plex Sans"', "sans-serif"],
-        display: ['"Space Grotesk"', '"IBM Plex Sans"', "sans-serif"],
-      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: "hsl(var(--card))",
         "card-foreground": "hsl(var(--card-foreground))",
+        popover: "hsl(var(--popover))",
+        "popover-foreground": "hsl(var(--popover-foreground))",
         primary: "hsl(var(--primary))",
         "primary-foreground": "hsl(var(--primary-foreground))",
         secondary: "hsl(var(--secondary))",
@@ -28,40 +28,13 @@ const config: Config = {
         ring: "hsl(var(--ring))",
       },
       borderRadius: {
-        xl: "1.5rem",
-        lg: "1rem",
-        md: "0.75rem",
-      },
-      boxShadow: {
-        soft: "0 18px 50px rgba(9, 47, 47, 0.12)",
-      },
-      keyframes: {
-        "rise-in": {
-          from: {
-            opacity: "0",
-            transform: "translateY(18px)",
-          },
-          to: {
-            opacity: "1",
-            transform: "translateY(0)",
-          },
-        },
-        shimmer: {
-          from: {
-            backgroundPosition: "200% 0",
-          },
-          to: {
-            backgroundPosition: "-200% 0",
-          },
-        },
-      },
-      animation: {
-        "rise-in": "rise-in 420ms ease-out both",
-        shimmer: "shimmer 2.8s linear infinite",
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
       },
     },
   },
-  plugins: [],
+  plugins: [tailwindcssAnimate],
 };
 
 export default config;

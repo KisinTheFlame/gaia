@@ -17,7 +17,7 @@ const configService = new ConfigService(repository);
 const app = createApp(configService);
 
 try {
-  await repository.ensureSchema(appConfig.dbInitRetries, appConfig.dbInitRetryDelayMs);
+  await repository.waitUntilReady(appConfig.dbInitRetries, appConfig.dbInitRetryDelayMs);
   const address = await app.listen({ port: appConfig.port, host: "0.0.0.0" });
 
   console.log(`Server is running at ${address}`);

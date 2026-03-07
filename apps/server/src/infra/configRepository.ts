@@ -5,7 +5,7 @@ import { Pool } from "pg";
 import { configs } from "./schema.js";
 
 export interface ConfigRepository {
-  ensureSchema(retries: number, retryDelayMs: number): Promise<void>;
+  waitUntilReady(retries: number, retryDelayMs: number): Promise<void>;
   close(): Promise<void>;
   getConfig(key: string): Promise<string | null>;
   listConfigs(input: ListConfigsQuery): Promise<ListConfigsPage>;
@@ -49,16 +49,10 @@ export class PgConfigRepository implements ConfigRepository {
     this.db = drizzle(this.pool);
   }
 
-  async ensureSchema(retries: number, retryDelayMs: number): Promise<void> {
+  async waitUntilReady(retries: number, retryDelayMs: number): Promise<void> {
     for (let attempt = 1; attempt <= retries; attempt += 1) {
       try {
-        await this.db.execute(sql`
-          CREATE TABLE IF NOT EXISTS configs (
-            config_key TEXT PRIMARY KEY,
-            config_value TEXT NOT NULL,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-          );
-        `);
+        await this.db.execute(sql`SELECT 1`);
         return;
       } catch (error) {
         if (attempt === retries) {

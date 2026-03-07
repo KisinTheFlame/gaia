@@ -5,6 +5,7 @@ RUN corepack enable
 
 FROM base AS build
 WORKDIR /app
+ENV DATABASE_URL="postgresql://gaia:gaia@localhost:5432/gaia?schema=public"
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json .npmrc ./
 COPY apps/server/package.json apps/server/package.json
@@ -20,6 +21,7 @@ COPY packages/client ./packages/client
 RUN pnpm --filter @kisintheflame/gaia-shared build
 RUN pnpm --filter @kisintheflame/gaia-server build
 RUN pnpm --filter @kisintheflame/gaia-server deploy --prod --legacy /prod/server
+RUN cd /prod/server && node node_modules/prisma/build/index.js generate --schema prisma/schema.prisma
 
 FROM node:22-alpine AS runner
 WORKDIR /app

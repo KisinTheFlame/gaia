@@ -15,16 +15,17 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  ApiError,
-  deleteConfig,
-  getConfig,
-  listConfigs,
-  setConfig,
-} from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -34,6 +35,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  ApiError,
+  deleteConfig,
+  getConfig,
+  listConfigs,
+  setConfig,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
@@ -189,22 +197,21 @@ export function ConfigWorkbenchPage() {
       return deleteConfig(selectedKey);
     },
     onSuccess: async (deleted) => {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("selected");
+      nextParams.delete("mode");
+
       setDraft(EMPTY_DRAFT);
       setBaseline(EMPTY_DRAFT);
       setMessage({
         tone: "success",
         text: `配置 ${deleted.key} 已删除`,
       });
-
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["configs"] }),
-        queryClient.invalidateQueries({ queryKey: ["config", deleted.key] }),
-      ]);
-
-      const nextParams = new URLSearchParams(searchParams);
-      nextParams.delete("selected");
-      nextParams.delete("mode");
       setSearchParams(nextParams);
+
+      await queryClient.cancelQueries({ queryKey: ["config", deleted.key] });
+      queryClient.removeQueries({ queryKey: ["config", deleted.key] });
+      await queryClient.invalidateQueries({ queryKey: ["configs"] });
     },
     onError: (error) => {
       setMessage({
@@ -319,189 +326,183 @@ export function ConfigWorkbenchPage() {
     void deleteMutation.mutateAsync();
   }
 
-  const headerSummary = listQuery.data
-    ? `共 ${listQuery.data.total} 条配置，当前第 ${page}/${totalPages} 页`
-    : "正在加载配置列表";
+  const modeLabel = isEditingExisting ? "编辑中" : isCreatingNew ? "新建中" : "等待选择";
+  const modeVariant = isEditingExisting ? "default" : isCreatingNew ? "secondary" : "outline";
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-      <section className="animate-rise-in surface flex min-h-[560px] flex-col overflow-hidden [animation-delay:80ms]">
-        <div className="flex flex-col gap-4 border-b border-border/60 px-5 py-5 sm:px-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <Badge variant="accent">Registry</Badge>
-                <span className="text-sm text-muted-foreground">{headerSummary}</span>
+    <div className="flex min-h-full w-full flex-1 flex-col gap-4 p-4 md:p-6">
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2">
+        <Card className="flex min-h-[520px] flex-col">
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <CardTitle className="text-xl">配置列表</CardTitle>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    void listQuery.refetch();
+                  }}
+                  disabled={listQuery.isFetching}
+                >
+                  <RefreshCw className={cn("h-4 w-4", listQuery.isFetching && "animate-spin")} />
+                  刷新
+                </Button>
+                <Button size="sm" onClick={openCreateMode}>
+                  <FilePlus2 className="h-4 w-4" />
+                  新建配置
+                </Button>
               </div>
-              <h2 className="font-display text-2xl font-semibold tracking-tight">配置列表</h2>
             </div>
-            <div className="flex flex-wrap gap-2">
+
+            <form className="flex flex-col gap-3 sm:flex-row" onSubmit={handleSearchSubmit}>
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchInput}
+                  onChange={(event) => {
+                    setSearchInput(event.target.value);
+                  }}
+                  className="pl-9"
+                  placeholder="按 key 搜索，例如 payment.timeout"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" variant="secondary">
+                  搜索
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setSearchInput("");
+                    if (!query) {
+                      return;
+                    }
+
+                    if (!confirmDiscardChanges()) {
+                      setSearchInput(query);
+                      return;
+                    }
+
+                    applySearchParams((params) => {
+                      params.delete("q");
+                      params.delete("selected");
+                      params.delete("mode");
+                      params.set("page", "1");
+                    });
+                  }}
+                >
+                  清空
+                </Button>
+              </div>
+            </form>
+          </CardHeader>
+
+          <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden px-0">
+            {listQuery.isError ? (
+              <div className="flex h-full items-center justify-center px-6">
+                <StatusMessage tone="error" text={getErrorMessage(listQuery.error, "读取配置列表失败")} />
+              </div>
+            ) : (
+              <Table className="w-full table-fixed">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[38%]">Key</TableHead>
+                    <TableHead>摘要</TableHead>
+                    <TableHead className="w-[26%]">更新时间</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {listQuery.isLoading
+                    ? Array.from({ length: 6 }, (_, index) => (
+                        <TableRow key={`loading-${index}`}>
+                          <TableCell colSpan={3}>
+                            <Skeleton className="h-10 w-full" />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    : listQuery.data && listQuery.data.items.length > 0
+                      ? listQuery.data.items.map((item) => (
+                          <TableRow
+                            key={item.key}
+                            data-state={item.key === selectedKey && isEditingExisting ? "selected" : undefined}
+                            className="cursor-pointer"
+                            onClick={() => {
+                              openConfig(item.key);
+                            }}
+                          >
+                            <TableCell className="font-medium">
+                              <span className="block truncate" title={item.key}>
+                                {item.key}
+                              </span>
+                            </TableCell>
+                            <TableCell className="max-w-0">
+                              <p className="truncate text-sm text-muted-foreground" title={item.valuePreview || "空字符串"}>
+                                {item.valuePreview || "空字符串"}
+                              </p>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {formatDateTime(item.updatedAt)}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      : (
+                          <TableRow>
+                            <TableCell colSpan={3}>
+                              <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 px-6 text-center">
+                                <div className="space-y-2">
+                                  <p className="text-sm font-medium">当前条件下没有找到配置</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    你可以调整关键字，或者直接创建第一条配置。
+                                  </p>
+                                </div>
+                                <Button size="sm" variant="secondary" onClick={openCreateMode}>
+                                  <FilePlus2 className="h-4 w-4" />
+                                  新建第一条配置
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+
+          <CardFooter className="justify-end border-t">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => handlePageChange(page - 1)} disabled={page <= 1}>
+                上一页
+              </Button>
+              <span className="min-w-20 text-center text-sm text-muted-foreground">
+                {page} / {totalPages}
+              </span>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  void listQuery.refetch();
-                }}
-                disabled={listQuery.isFetching}
+                onClick={() => handlePageChange(page + 1)}
+                disabled={page >= totalPages}
               >
-                <RefreshCw className={cn("h-4 w-4", listQuery.isFetching && "animate-spin")} />
-                刷新
-              </Button>
-              <Button size="sm" onClick={openCreateMode}>
-                <FilePlus2 className="h-4 w-4" />
-                新建配置
+                下一页
               </Button>
             </div>
-          </div>
-          <form className="flex flex-col gap-3 sm:flex-row" onSubmit={handleSearchSubmit}>
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchInput}
-                onChange={(event) => {
-                  setSearchInput(event.target.value);
-                }}
-                className="pl-9"
-                placeholder="按 key 搜索，例如 payment.timeout"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" variant="secondary">
-                搜索
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setSearchInput("");
-                  if (!query) {
-                    return;
-                  }
+          </CardFooter>
+        </Card>
 
-                  if (!confirmDiscardChanges()) {
-                    setSearchInput(query);
-                    return;
-                  }
-
-                  applySearchParams((params) => {
-                    params.delete("q");
-                    params.delete("selected");
-                    params.delete("mode");
-                    params.set("page", "1");
-                  });
-                }}
-              >
-                清空
-              </Button>
-            </div>
-          </form>
-        </div>
-
-        <div className="flex-1 overflow-hidden">
-          {listQuery.isError ? (
-            <div className="flex h-full items-center justify-center px-6">
-              <StatusMessage tone="error" text={getErrorMessage(listQuery.error, "读取配置列表失败")} />
-            </div>
-          ) : (
-            <Table className="min-w-[640px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[32%]">Key</TableHead>
-                  <TableHead>摘要</TableHead>
-                  <TableHead className="w-[24%]">更新时间</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {listQuery.isLoading ? (
-                  Array.from({ length: 6 }, (_, index) => (
-                    <TableRow key={`loading-${index}`}>
-                      <TableCell colSpan={3}>
-                        <div className="h-11 rounded-lg bg-[linear-gradient(90deg,rgba(221,235,234,0.7),rgba(255,255,255,0.95),rgba(221,235,234,0.7))] bg-[length:200%_100%] animate-shimmer" />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : listQuery.data && listQuery.data.items.length > 0 ? (
-                  listQuery.data.items.map((item) => (
-                    <TableRow
-                      key={item.key}
-                      data-state={item.key === selectedKey && isEditingExisting ? "selected" : undefined}
-                      className="cursor-pointer"
-                      onClick={() => {
-                        openConfig(item.key);
-                      }}
-                    >
-                      <TableCell className="font-medium text-foreground">{item.key}</TableCell>
-                      <TableCell className="max-w-0">
-                        <p className="max-h-10 overflow-hidden break-all text-sm text-muted-foreground">
-                          {item.valuePreview || "空字符串"}
-                        </p>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDateTime(item.updatedAt)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={3}>
-                      <div className="flex min-h-[180px] flex-col items-center justify-center gap-3 text-center">
-                        <div className="surface-muted px-4 py-3 text-muted-foreground">
-                          当前条件下没有找到配置
-                        </div>
-                        <Button size="sm" variant="secondary" onClick={openCreateMode}>
-                          <FilePlus2 className="h-4 w-4" />
-                          新建第一条配置
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-3 border-t border-border/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="text-sm text-muted-foreground">
-            每页 {PAGE_SIZE} 条，支持 key 模糊搜索，列表摘要默认折叠为单行预览。
-          </p>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => handlePageChange(page - 1)} disabled={page <= 1}>
-              上一页
-            </Button>
-            <span className="min-w-20 text-center text-sm text-muted-foreground">
-              {page} / {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handlePageChange(page + 1)}
-              disabled={page >= totalPages}
-            >
-              下一页
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      <section className="animate-rise-in surface flex min-h-[560px] flex-col overflow-hidden [animation-delay:140ms]">
-        <div className="sticky top-0 z-10 border-b border-border/60 bg-white/90 px-5 py-5 backdrop-blur sm:px-6">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="mb-2 flex items-center gap-2">
-                  <Badge variant={isEditingExisting ? "primary" : "muted"}>
-                    {isEditingExisting ? "Editing" : isCreatingNew ? "Creating" : "Idle"}
-                  </Badge>
-                  {isDirty ? (
-                    <span className="text-sm font-medium text-accent-foreground">有未保存变更</span>
-                  ) : null}
+        <Card className="flex min-h-[520px] flex-col">
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={modeVariant}>{modeLabel}</Badge>
+                  {isDirty ? <Badge variant="secondary">未保存变更</Badge> : null}
                 </div>
-                <h2 className="font-display text-2xl font-semibold tracking-tight">详情与编辑</h2>
+                <CardTitle className="text-xl">详情与编辑</CardTitle>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
                   onClick={handleFormatJson}
                   disabled={!hasDraftContent}
@@ -531,73 +532,93 @@ export function ConfigWorkbenchPage() {
               </div>
             </div>
             {message ? <StatusMessage tone={message.tone} text={message.text} /> : null}
-          </div>
-        </div>
+          </CardHeader>
 
-        <div className="flex-1 overflow-auto px-5 py-5 sm:px-6">
-          {detailQuery.isError && isEditingExisting ? (
-            <StatusMessage tone="error" text={getErrorMessage(detailQuery.error, "读取配置详情失败")} />
-          ) : mode === "idle" ? (
-            <EmptyEditorState onCreate={openCreateMode} />
-          ) : (
-            <div className="space-y-5">
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-foreground">配置 Key</span>
-                <Input
-                  value={draft.key}
-                  onChange={(event) => {
-                    setDraft((current) => ({
-                      ...current,
-                      key: event.target.value,
-                    }));
-                  }}
-                  disabled={isEditingExisting}
-                  placeholder="例如 payment.timeout"
-                />
-                <p className="text-sm text-muted-foreground">
-                  {isEditingExisting
-                    ? "首版不支持直接重命名 key，如需调整请新建新 key 并删除旧 key。"
-                    : "key 不能为空，建议使用稳定、可读的命名。"}
-                </p>
-              </label>
-
-              <label className="block space-y-2">
-                <span className="text-sm font-medium text-foreground">配置 Value</span>
-                <Textarea
-                  value={draft.value}
-                  onChange={(event) => {
-                    setDraft((current) => ({
-                      ...current,
-                      value: event.target.value,
-                    }));
-                  }}
-                  placeholder='支持普通字符串，也可直接粘贴 JSON，如 {"enabled": true}'
-                />
-                <p className="text-sm leading-6 text-muted-foreground">
-                  存储模型保持为字符串；如果内容本身是 JSON，可以使用“格式化 JSON”提升可读性。
-                </p>
-              </label>
-
-              {detailQuery.isFetching && isEditingExisting ? (
-                <div className="surface-muted px-4 py-3 text-sm text-muted-foreground">
-                  正在同步当前配置详情...
+          <CardContent className="flex min-h-0 flex-1 flex-col overflow-auto">
+            {detailQuery.isError && isEditingExisting ? (
+              <StatusMessage tone="error" text={getErrorMessage(detailQuery.error, "读取配置详情失败")} />
+            ) : mode === "idle" ? (
+              <EmptyEditorState onCreate={openCreateMode} />
+            ) : (
+              <div className="space-y-6">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <EditorHint
+                    title="编辑规则"
+                    description={
+                      isEditingExisting
+                        ? "当前版本不支持直接重命名 key，如需调整请创建新 key 后删除旧 key。"
+                        : "建议使用稳定、可读的 key 命名，避免将环境信息直接写进 key。"
+                    }
+                  />
+                  <EditorHint
+                    title="值格式"
+                    description="配置值仍以字符串存储；如果粘贴的是 JSON，可以用上方按钮做格式化。"
+                  />
                 </div>
-              ) : null}
-            </div>
-          )}
-        </div>
-      </section>
+
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium">配置 Key</span>
+                  <Input
+                    value={draft.key}
+                    onChange={(event) => {
+                      setDraft((current) => ({
+                        ...current,
+                        key: event.target.value,
+                      }));
+                    }}
+                    disabled={isEditingExisting}
+                    placeholder="例如 payment.timeout"
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium">配置 Value</span>
+                  <Textarea
+                    value={draft.value}
+                    onChange={(event) => {
+                      setDraft((current) => ({
+                        ...current,
+                        value: event.target.value,
+                      }));
+                    }}
+                    placeholder='支持普通字符串，也可直接粘贴 JSON，如 {"enabled": true}'
+                  />
+                </label>
+
+                {detailQuery.isFetching && isEditingExisting ? (
+                  <StatusMessage tone="info" text="正在同步当前配置详情..." />
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function EditorHint({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-muted/30 px-4 py-3">
+      <p className="text-sm font-medium">{title}</p>
+      <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
     </div>
   );
 }
 
 function EmptyEditorState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="flex h-full min-h-[360px] flex-col items-center justify-center gap-4 text-center">
-      <div className="surface-muted max-w-md px-6 py-5">
-        <p className="font-display text-xl font-semibold text-foreground">还没有选中配置</p>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          从左侧选择一条配置查看详情，或直接开始创建新的配置项。
+    <div className="flex min-h-[360px] flex-1 flex-col items-center justify-center gap-4 text-center">
+      <div className="space-y-2">
+        <p className="text-lg font-semibold">还没有选中配置</p>
+        <p className="max-w-md text-sm leading-6 text-muted-foreground">
+          从左侧列表选择配置查看详情，或者直接开始创建新的配置项。
         </p>
       </div>
       <Button onClick={onCreate}>
@@ -619,9 +640,9 @@ function StatusMessage({
     <div
       className={cn(
         "flex items-start gap-3 rounded-lg border px-4 py-3 text-sm leading-6",
-        tone === "error" && "border-destructive/25 bg-destructive/10 text-destructive",
+        tone === "error" && "border-destructive/20 bg-destructive/10 text-destructive",
         tone === "success" && "border-primary/20 bg-primary/10 text-primary",
-        tone === "info" && "border-border bg-secondary/60 text-secondary-foreground",
+        tone === "info" && "border-border bg-muted/60 text-muted-foreground",
       )}
     >
       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -640,9 +661,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+    dateStyle: "medium",
+    timeStyle: "short",
   }).format(new Date(value));
 }

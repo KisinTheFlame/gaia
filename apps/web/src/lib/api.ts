@@ -26,11 +26,13 @@ async function requestJson<T>(
   init: RequestInit,
   parse: (payload: unknown) => T,
 ): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (init.body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(`/api${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers ?? {}),
-    },
+    headers,
     ...init,
   });
 
