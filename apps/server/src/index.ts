@@ -6,11 +6,7 @@ import { ConfigService } from "./service/configService.js";
 const appConfig = loadAppConfig();
 
 const repository = new PgConfigRepository({
-  host: appConfig.dbHost,
-  port: appConfig.dbPort,
-  database: appConfig.dbName,
-  user: appConfig.dbUser,
-  password: appConfig.dbPassword,
+  connectionString: appConfig.databaseUrl,
 });
 
 const configService = new ConfigService(repository);
@@ -21,9 +17,7 @@ try {
   const address = await app.listen({ port: appConfig.port, host: "0.0.0.0" });
 
   console.log(`Server is running at ${address}`);
-  console.log(
-    `Config storage: postgresql://${appConfig.dbUser}@${appConfig.dbHost}:${appConfig.dbPort}/${appConfig.dbName}`,
-  );
+  console.log(`Config storage: ${redactDatabaseUrl(appConfig.databaseUrl)}`);
 } catch (error) {
   console.error("服务启动失败:", error);
   await repository.close();
@@ -44,3 +38,15 @@ process.once("SIGINT", () => {
 process.once("SIGTERM", () => {
   void shutdown("SIGTERM");
 });
+
+function redactDatabaseUrl(databaseUrl: string): string {
+  try {
+    const parsed = new URL(databaseUrl);
+    if (parsed.password) {
+      parsed.password = "***";
+    }
+    return parsed.toString();
+  } catch {
+    return databaseUrl;
+  }
+}

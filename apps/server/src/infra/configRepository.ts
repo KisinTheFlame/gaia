@@ -33,11 +33,7 @@ export interface ListConfigsPage {
 }
 
 export interface PgConfigConnection {
-  host: string;
-  port: number;
-  database: string;
-  user: string;
-  password: string;
+  connectionString: string;
 }
 
 export class PgConfigRepository implements ConfigRepository {
@@ -45,7 +41,9 @@ export class PgConfigRepository implements ConfigRepository {
   private readonly db: NodePgDatabase;
 
   constructor(connection: PgConfigConnection) {
-    this.pool = new Pool(connection);
+    this.pool = new Pool({
+      connectionString: connection.connectionString,
+    });
     this.db = drizzle(this.pool);
   }
 
