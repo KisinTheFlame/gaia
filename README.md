@@ -62,6 +62,12 @@ Prisma migration 流程：
 
 ## SDK 使用（@kisinwen/gaia-client）
 
+安装：
+
+```bash
+npm install @kisinwen/gaia-client
+```
+
 先在业务项目根目录准备 `gaia.config.yml`：
 
 ```yaml
@@ -116,6 +122,11 @@ pnpm run app:deploy
 ## npm
 
 scope：`@kisinwen`
+
+公开包：
+
+- `@kisinwen/gaia-shared`
+- `@kisinwen/gaia-client`
 
 仓库 `.npmrc` 已设置：
 
