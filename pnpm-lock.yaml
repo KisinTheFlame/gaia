@@ -134,7 +134,7 @@ importers:
   packages/client:
     dependencies:
       '@kisintheflame/gaia-shared':
-        specifier: workspace:^0.1.0
+        specifier: workspace:^0.2.0
         version: link:../shared
       yaml:
         specifier: ^2.8.1
