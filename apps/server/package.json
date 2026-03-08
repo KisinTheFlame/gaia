@@ -9,7 +9,7 @@
     "build": "pnpm db:generate && tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "typecheck": "pnpm db:generate && tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "tsx --test --test-force-exit src/**/*.test.ts",
     "db:generate": "sh -lc 'DATABASE_URL=\"${DATABASE_URL:-postgresql://placeholder:placeholder@localhost:5432/placeholder?schema=public}\" pnpm exec prisma generate'",
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",

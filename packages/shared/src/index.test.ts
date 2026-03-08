@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ListConfigsQuerySchema } from "./index.js";
+import { ConfigChangeEventSchema, ListConfigsQuerySchema, SubscribeConfigsQuerySchema } from "./index.js";
 
 test("ListConfigsQuerySchema applies default pagination", () => {
   const parsed = ListConfigsQuerySchema.parse({});
@@ -43,4 +43,40 @@ test("ListConfigsQuerySchema rejects invalid pageSize values", () => {
   });
 
   assert.equal(result.success, false);
+});
+
+test("SubscribeConfigsQuerySchema parses repeated keys", () => {
+  const parsed = SubscribeConfigsQuerySchema.parse({
+    key: ["  feature.a ", "feature.b"],
+  });
+
+  assert.deepEqual(parsed, {
+    key: ["feature.a", "feature.b"],
+  });
+});
+
+test("ConfigChangeEventSchema accepts upsert and delete events", () => {
+  const upsert = ConfigChangeEventSchema.parse({
+    type: "upsert",
+    key: "feature.a",
+    value: "enabled",
+    changedAt: "2026-03-09T10:00:00.000Z",
+  });
+  const deleted = ConfigChangeEventSchema.parse({
+    type: "delete",
+    key: "feature.a",
+    changedAt: "2026-03-09T11:00:00.000Z",
+  });
+
+  assert.deepEqual(upsert, {
+    type: "upsert",
+    key: "feature.a",
+    value: "enabled",
+    changedAt: "2026-03-09T10:00:00.000Z",
+  });
+  assert.deepEqual(deleted, {
+    type: "delete",
+    key: "feature.a",
+    changedAt: "2026-03-09T11:00:00.000Z",
+  });
 });

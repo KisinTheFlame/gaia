@@ -19,13 +19,33 @@ export interface ListConfigsResult {
   total: number;
 }
 
+export interface ConfigRecordResult {
+  key: string;
+  value: string;
+  updatedAt: string;
+}
+
+export interface DeletedConfigResult {
+  key: string;
+  value: string;
+}
+
 const PREVIEW_LENGTH = 120;
 
 export class ConfigService {
   constructor(private readonly repository: ConfigRepository) {}
 
-  getConfig(key: string): Promise<string | null> {
-    return this.repository.getConfig(key);
+  async getConfig(key: string): Promise<ConfigRecordResult | null> {
+    const result = await this.repository.getConfig(key);
+    if (result === null) {
+      return null;
+    }
+
+    return {
+      key: result.key,
+      value: result.value,
+      updatedAt: result.updatedAt.toISOString(),
+    };
   }
 
   async listConfigs(input: ListConfigsInput): Promise<ListConfigsResult> {
@@ -43,11 +63,16 @@ export class ConfigService {
     };
   }
 
-  setConfig(key: string, value: string): Promise<void> {
-    return this.repository.setConfig(key, value);
+  async setConfig(key: string, value: string): Promise<ConfigRecordResult> {
+    const result = await this.repository.setConfig(key, value);
+    return {
+      key: result.key,
+      value: result.value,
+      updatedAt: result.updatedAt.toISOString(),
+    };
   }
 
-  deleteConfig(key: string): Promise<string | null> {
+  deleteConfig(key: string): Promise<DeletedConfigResult | null> {
     return this.repository.deleteConfig(key);
   }
 }

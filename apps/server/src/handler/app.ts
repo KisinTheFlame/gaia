@@ -1,4 +1,5 @@
 import {
+  ConfigChangeEventSchema,
   ConfigResponseSchema,
   DeleteConfigQuerySchema,
   DeleteConfigResponseSchema,
@@ -7,13 +8,20 @@ import {
   ListConfigsQuerySchema,
   ListConfigsResponseSchema,
   SetConfigRequestSchema,
+  SubscribeConfigsQuerySchema,
 } from "@kisintheflame/gaia-shared";
 import Fastify, { type FastifyReply } from "fastify";
 import { z } from "zod";
 
 import type { ConfigService } from "../service/configService.js";
+import { ConfigChangeBroker } from "./configChangeBroker.js";
 
-export function createApp(configService: ConfigService) {
+const SSE_KEEPALIVE_MS = 15_000;
+
+export function createApp(
+  configService: ConfigService,
+  broker: ConfigChangeBroker = new ConfigChangeBroker(),
+) {
   const app = Fastify();
 
   app.get("/configs", async (request, reply) => {
@@ -40,8 +48,8 @@ export function createApp(configService: ConfigService) {
     }
 
     try {
-      const value = await configService.getConfig(queryResult.data.key);
-      if (value === null) {
+      const record = await configService.getConfig(queryResult.data.key);
+      if (record === null) {
         sendValidatedJson(reply, 404, ErrorResponseSchema, {
           error: "配置不存在",
           key: queryResult.data.key,
@@ -49,10 +57,7 @@ export function createApp(configService: ConfigService) {
         return;
       }
 
-      sendValidatedJson(reply, 200, ConfigResponseSchema, {
-        key: queryResult.data.key,
-        value,
-      });
+      sendValidatedJson(reply, 200, ConfigResponseSchema, record);
     } catch (error) {
       request.log.error({ error }, "读取配置失败");
       sendValidatedJson(reply, 500, ErrorResponseSchema, { error: "读取配置失败" });
@@ -69,8 +74,14 @@ export function createApp(configService: ConfigService) {
     }
 
     try {
-      await configService.setConfig(bodyResult.data.key, bodyResult.data.value);
-      sendValidatedJson(reply, 200, ConfigResponseSchema, bodyResult.data);
+      const saved = await configService.setConfig(bodyResult.data.key, bodyResult.data.value);
+      sendValidatedJson(reply, 200, ConfigResponseSchema, saved);
+      broker.publish({
+        type: "upsert",
+        key: saved.key,
+        value: saved.value,
+        changedAt: saved.updatedAt,
+      });
     } catch (error) {
       request.log.error({ error }, "写入配置失败");
       sendValidatedJson(reply, 500, ErrorResponseSchema, { error: "写入配置失败" });
@@ -85,8 +96,8 @@ export function createApp(configService: ConfigService) {
     }
 
     try {
-      const value = await configService.deleteConfig(queryResult.data.key);
-      if (value === null) {
+      const deleted = await configService.deleteConfig(queryResult.data.key);
+      if (deleted === null) {
         sendValidatedJson(reply, 404, ErrorResponseSchema, {
           error: "配置不存在",
           key: queryResult.data.key,
@@ -94,15 +105,65 @@ export function createApp(configService: ConfigService) {
         return;
       }
 
+      const changedAt = new Date().toISOString();
       sendValidatedJson(reply, 200, DeleteConfigResponseSchema, {
-        key: queryResult.data.key,
-        value,
+        key: deleted.key,
+        value: deleted.value,
         deleted: true,
+        changedAt,
+      });
+      broker.publish({
+        type: "delete",
+        key: deleted.key,
+        changedAt,
       });
     } catch (error) {
       request.log.error({ error }, "删除配置失败");
       sendValidatedJson(reply, 500, ErrorResponseSchema, { error: "删除配置失败" });
     }
+  });
+
+  app.get("/subscribe", async (request, reply) => {
+    const queryResult = SubscribeConfigsQuerySchema.safeParse(request.query);
+    if (!queryResult.success) {
+      sendValidatedJson(reply, 400, ErrorResponseSchema, { error: "至少订阅一个 key" });
+      return;
+    }
+
+    reply.hijack();
+
+    const raw = reply.raw;
+    raw.statusCode = 200;
+    raw.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    raw.setHeader("Cache-Control", "no-cache, no-transform");
+    raw.setHeader("Connection", "keep-alive");
+    raw.setHeader("X-Accel-Buffering", "no");
+    raw.flushHeaders?.();
+    raw.write(": connected\n\n");
+
+    const unsubscribe = broker.subscribe(queryResult.data.key, (event) => {
+      sendSseEvent(raw, event);
+    });
+    const keepalive = setInterval(() => {
+      raw.write(": ping\n\n");
+    }, SSE_KEEPALIVE_MS);
+    keepalive.unref?.();
+
+    let isCleanedUp = false;
+    const cleanup = () => {
+      if (isCleanedUp) {
+        return;
+      }
+
+      isCleanedUp = true;
+      clearInterval(keepalive);
+      unsubscribe();
+    };
+
+    request.raw.once("close", cleanup);
+    raw.once("close", cleanup);
+    raw.once("finish", cleanup);
+    raw.once("error", cleanup);
   });
 
   app.setNotFoundHandler((_request, reply) => {
@@ -130,6 +191,11 @@ function sendValidatedJson<T extends z.ZodTypeAny>(
 ): void {
   const payload = schema.parse(body);
   void reply.status(statusCode).send(payload);
+}
+
+function sendSseEvent(reply: NodeJS.WritableStream, event: z.input<typeof ConfigChangeEventSchema>): void {
+  const payload = ConfigChangeEventSchema.parse(event);
+  reply.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
 function isInvalidJsonBodyError(error: unknown): boolean {
