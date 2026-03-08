@@ -1,5 +1,5 @@
 {
-  "name": "@kisintheflame/gaia-shared",
+  "name": "@kisinwen/gaia-shared",
   "version": "0.2.0",
   "type": "module",
   "main": "dist/index.js",
@@ -27,6 +27,7 @@
     "typescript": "^5.9.3"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   }
 }

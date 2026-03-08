@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
 
     steps:
       - name: Checkout
@@ -31,8 +30,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://npm.pkg.github.com
-          scope: "@kisintheflame"
+          registry-url: https://registry.npmjs.org
+          scope: "@kisinwen"
           cache: pnpm
 
       - name: Install dependencies
@@ -60,21 +59,21 @@ jobs:
       - name: Sync package versions
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
-          pnpm --filter @kisintheflame/gaia-shared exec npm pkg set "version=$VERSION"
-          pnpm --filter @kisintheflame/gaia-client exec npm pkg set "version=$VERSION"
-          pnpm --filter @kisintheflame/gaia-client exec npm pkg set "dependencies.@kisintheflame/gaia-shared=$VERSION"
+          pnpm --filter @kisinwen/gaia-shared exec npm pkg set "version=$VERSION"
+          pnpm --filter @kisinwen/gaia-client exec npm pkg set "version=$VERSION"
+          pnpm --filter @kisinwen/gaia-client exec npm pkg set "dependencies.@kisinwen/gaia-shared=$VERSION"
 
       - name: Build shared and client
         run: |
-          pnpm --filter @kisintheflame/gaia-shared build
-          pnpm --filter @kisintheflame/gaia-client build
+          pnpm --filter @kisinwen/gaia-shared build
+          pnpm --filter @kisinwen/gaia-client build
 
       - name: Publish shared
-        run: pnpm --filter @kisintheflame/gaia-shared publish --no-git-checks
+        run: pnpm --filter @kisinwen/gaia-shared publish --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish client
-        run: pnpm --filter @kisintheflame/gaia-client publish --no-git-checks
+        run: pnpm --filter @kisinwen/gaia-client publish --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

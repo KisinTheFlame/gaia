@@ -18,9 +18,9 @@ COPY apps/server ./apps/server
 COPY packages/shared ./packages/shared
 COPY packages/client ./packages/client
 
-RUN pnpm --filter @kisintheflame/gaia-shared build
-RUN pnpm --filter @kisintheflame/gaia-server build
-RUN pnpm --filter @kisintheflame/gaia-server deploy --prod --legacy /prod/server
+RUN pnpm --filter @kisinwen/gaia-shared build
+RUN pnpm --filter @kisinwen/gaia-server build
+RUN pnpm --filter @kisinwen/gaia-server deploy --prod --legacy /prod/server
 RUN cd /prod/server && node node_modules/prisma/build/index.js generate --schema prisma/schema.prisma
 
 FROM node:22-alpine AS runner

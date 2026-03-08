@@ -1,5 +1,5 @@
 {
-  "name": "@kisintheflame/gaia-web",
+  "name": "@kisinwen/gaia-web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kisintheflame/gaia-shared": "workspace:^0.1.0",
+    "@kisinwen/gaia-shared": "workspace:^0.1.0",
     "@radix-ui/react-slot": "^1.2.4",
     "@tanstack/react-query": "^5.90.21",
     "class-variance-authority": "^0.7.1",

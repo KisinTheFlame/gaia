@@ -14,8 +14,8 @@ RUN pnpm install --frozen-lockfile
 COPY apps/web ./apps/web
 COPY packages/shared ./packages/shared
 
-RUN pnpm --filter @kisintheflame/gaia-shared build
-RUN pnpm --filter @kisintheflame/gaia-web build
+RUN pnpm --filter @kisinwen/gaia-shared build
+RUN pnpm --filter @kisinwen/gaia-web build
 
 FROM nginx:1.27-alpine AS runner
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf

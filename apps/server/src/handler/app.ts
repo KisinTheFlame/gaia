@@ -9,7 +9,7 @@ import {
   ListConfigsResponseSchema,
   SetConfigRequestSchema,
   SubscribeConfigsQuerySchema,
-} from "@kisintheflame/gaia-shared";
+} from "@kisinwen/gaia-shared";
 import Fastify, { type FastifyReply } from "fastify";
 import { z } from "zod";
 

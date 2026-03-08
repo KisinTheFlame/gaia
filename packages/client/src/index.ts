@@ -10,7 +10,7 @@ import {
   GaiaClientConfigSchema,
   GetConfigQuerySchema,
   SetConfigRequestSchema,
-} from "@kisintheflame/gaia-shared";
+} from "@kisinwen/gaia-shared";
 import YAML from "yaml";
 import { z } from "zod";
 

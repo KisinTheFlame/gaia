@@ -9,7 +9,7 @@ import {
   type ListConfigsQuery,
   type ListConfigsResponse,
   type SetConfigRequest,
-} from "@kisintheflame/gaia-shared";
+} from "@kisinwen/gaia-shared";
 
 export class ApiError extends Error {
   constructor(

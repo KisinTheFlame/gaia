@@ -1,4 +1,4 @@
-import type { ConfigChangeEvent } from "@kisintheflame/gaia-shared";
+import type { ConfigChangeEvent } from "@kisinwen/gaia-shared";
 
 type Subscriber = (event: ConfigChangeEvent) => void;
 

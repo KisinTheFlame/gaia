@@ -8,8 +8,8 @@
     "strict": true,
     "noEmit": true,
     "paths": {
-      "@kisintheflame/gaia-shared": ["../../packages/shared/src/index.ts"],
-      "@kisintheflame/gaia-shared/*": ["../../packages/shared/src/*"]
+      "@kisinwen/gaia-shared": ["../../packages/shared/src/index.ts"],
+      "@kisinwen/gaia-shared/*": ["../../packages/shared/src/*"]
     }
   },
   "include": ["src"]
