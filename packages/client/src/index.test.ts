@@ -6,8 +6,15 @@ import {
   type ServerResponse,
 } from "node:http";
 import test from "node:test";
+import { z } from "zod";
 
-import { closeGaiaClient, GaiaClientError, getConfig, initializeGaiaClient } from "./index.js";
+import {
+  closeGaiaClient,
+  GaiaClientError,
+  getConfig,
+  initializeGaiaClient,
+  listConfigs,
+} from "./index.js";
 
 test("getConfig only fetches a key once and then serves the cache", async () => {
   await runWithServer(
@@ -33,6 +40,103 @@ test("getConfig only fetches a key once and then serves the cache", async () => 
       assert.deepEqual(second, first);
       assert.equal(server.getCalls.get("a"), 1);
       assert.deepEqual(server.subscribeRequests[0], ["a"]);
+    },
+  );
+});
+
+test("listConfigs sends query and pagination params and validates the response", async () => {
+  await runWithServer(
+    new FakeGaiaHttpServer({
+      "payment.timeout": {
+        value: "3000",
+        updatedAt: "2026-03-09T10:00:00.000Z",
+      },
+      "payment.retry": {
+        value: "2",
+        updatedAt: "2026-03-09T10:01:00.000Z",
+      },
+      "user.theme": {
+        value: "dark",
+        updatedAt: "2026-03-09T10:02:00.000Z",
+      },
+    }),
+    async (server) => {
+      await initializeGaiaClient({ baseUrl: server.baseUrl });
+
+      const result = await listConfigs({
+        query: "payment",
+        page: 2,
+        pageSize: 1,
+      });
+
+      assert.deepEqual(result, {
+        items: [
+          {
+            key: "payment.timeout",
+            valuePreview: "3000",
+            updatedAt: "2026-03-09T10:00:00.000Z",
+          },
+        ],
+        page: 2,
+        pageSize: 1,
+        total: 2,
+      });
+      assert.deepEqual(server.listCalls[0], {
+        query: "payment",
+        page: 2,
+        pageSize: 1,
+      });
+    },
+  );
+});
+
+test("listConfigs wraps invalid JSON responses as validation errors", async () => {
+  await runWithRawServer(
+    async (_request, response) => {
+      response.statusCode = 200;
+      response.setHeader("Content-Type", "application/json");
+      response.end("{");
+    },
+    async (baseUrl) => {
+      await initializeGaiaClient({ baseUrl });
+
+      await assert.rejects(
+        () => listConfigs(),
+        (error: unknown) => {
+          assert.ok(error instanceof GaiaClientError);
+          assert.equal(error.code, "VALIDATION_FAILED");
+          assert.match(error.message, /响应不是合法 JSON/);
+          return true;
+        },
+      );
+    },
+  );
+});
+
+test("listConfigs rejects structurally invalid payloads", async () => {
+  await runWithRawServer(
+    async (_request, response) => {
+      response.statusCode = 200;
+      response.setHeader("Content-Type", "application/json");
+      response.end(
+        JSON.stringify({
+          items: "not-an-array",
+          page: 1,
+          pageSize: 20,
+          total: 0,
+        }),
+      );
+    },
+    async (baseUrl) => {
+      await initializeGaiaClient({ baseUrl });
+
+      await assert.rejects(
+        () => listConfigs(),
+        (error: unknown) => {
+          assert.ok(error instanceof z.ZodError || error instanceof GaiaClientError);
+          return true;
+        },
+      );
     },
   );
 });
@@ -97,12 +201,15 @@ test("SSE delete events turn cached keys into 404-style misses without refetchin
         }
       });
 
-      await assert.rejects(() => getConfig("a"), (error: unknown) => {
-        assert.ok(error instanceof GaiaClientError);
-        assert.equal(error.code, "HTTP_ERROR");
-        assert.equal(error.status, 404);
-        return true;
-      });
+      await assert.rejects(
+        () => getConfig("a"),
+        (error: unknown) => {
+          assert.ok(error instanceof GaiaClientError);
+          assert.equal(error.code, "HTTP_ERROR");
+          assert.equal(error.status, 404);
+          return true;
+        },
+      );
       assert.equal(server.getCalls.get("a"), 1);
     },
   );
@@ -187,17 +294,25 @@ test("closeGaiaClient stops subscriptions and resets initialization state", asyn
 
       await closeGaiaClient();
 
-      await assert.rejects(() => getConfig("a"), (error: unknown) => {
-        assert.ok(error instanceof GaiaClientError);
-        assert.equal(error.code, "CONFIG_NOT_INITIALIZED");
-        return true;
-      });
+      await assert.rejects(
+        () => getConfig("a"),
+        (error: unknown) => {
+          assert.ok(error instanceof GaiaClientError);
+          assert.equal(error.code, "CONFIG_NOT_INITIALIZED");
+          return true;
+        },
+      );
     },
   );
 });
 
 class FakeGaiaHttpServer {
   readonly getCalls = new Map<string, number>();
+  readonly listCalls: Array<{
+    query: string;
+    page: number;
+    pageSize: number;
+  }> = [];
   readonly subscribeRequests: string[][] = [];
 
   baseUrl = "";
@@ -268,16 +383,20 @@ class FakeGaiaHttpServer {
     this.server = null;
   }
 
-  emit(event: {
-    type: "upsert";
-    key: string;
-    value: string;
-    changedAt: string;
-  } | {
-    type: "delete";
-    key: string;
-    changedAt: string;
-  }): void {
+  emit(
+    event:
+      | {
+          type: "upsert";
+          key: string;
+          value: string;
+          changedAt: string;
+        }
+      | {
+          type: "delete";
+          key: string;
+          changedAt: string;
+        },
+  ): void {
     if (event.type === "upsert") {
       this.configs.set(event.key, {
         value: event.value,
@@ -328,6 +447,33 @@ class FakeGaiaHttpServer {
         key,
         value: config.value,
         updatedAt: config.updatedAt,
+      });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/configs") {
+      const query = url.searchParams.get("query") ?? "";
+      const page = Number(url.searchParams.get("page") ?? "1");
+      const pageSize = Number(url.searchParams.get("pageSize") ?? "20");
+
+      this.listCalls.push({ query, page, pageSize });
+
+      const filtered = [...this.configs.entries()]
+        .filter(([key]) => key.includes(query))
+        .sort((left, right) => right[1].updatedAt.localeCompare(left[1].updatedAt));
+
+      const startIndex = (page - 1) * pageSize;
+      const items = filtered.slice(startIndex, startIndex + pageSize).map(([key, config]) => ({
+        key,
+        valuePreview: config.value.slice(0, 80),
+        updatedAt: config.updatedAt,
+      }));
+
+      this.sendJson(response, 200, {
+        items,
+        page,
+        pageSize,
+        total: filtered.length,
       });
       return;
     }
@@ -388,6 +534,47 @@ async function runWithServer(
   } finally {
     await closeGaiaClient();
     await server.close();
+  }
+}
+
+async function runWithRawServer(
+  handler: (
+    request: IncomingMessage,
+    response: ServerResponse<IncomingMessage>,
+  ) => Promise<void> | void,
+  callback: (baseUrl: string) => Promise<void>,
+): Promise<void> {
+  await closeGaiaClient();
+
+  const server = createServer((request, response) => {
+    void handler(request, response);
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      resolve();
+    });
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  try {
+    await callback(baseUrl);
+  } finally {
+    await closeGaiaClient();
+    await new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
   }
 }
 

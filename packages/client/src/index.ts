@@ -3,12 +3,15 @@ import path from "node:path";
 
 import {
   ConfigChangeEventSchema,
+  type ListConfigsResponse,
   ConfigResponseSchema,
   DeleteConfigQuerySchema,
   DeleteConfigResponseSchema,
   ErrorResponseSchema,
   GaiaClientConfigSchema,
   GetConfigQuerySchema,
+  ListConfigsQuerySchema,
+  ListConfigsResponseSchema,
   SetConfigRequestSchema,
 } from "@kisinwen/gaia-shared";
 import YAML from "yaml";
@@ -170,6 +173,22 @@ export async function getConfig(key: string): Promise<z.infer<typeof ConfigRespo
   }
 }
 
+export async function listConfigs(options?: {
+  query?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<ListConfigsResponse> {
+  ensureInitialized();
+  const query = ListConfigsQuerySchema.parse(options ?? {});
+  const searchParams = new URLSearchParams({
+    query: query.query,
+    page: String(query.page),
+    pageSize: String(query.pageSize),
+  });
+  const payload = await requestJson(buildUrl(`/configs?${searchParams.toString()}`));
+  return ListConfigsResponseSchema.parse(payload);
+}
+
 export async function setConfig(
   key: string,
   value: string,
@@ -290,7 +309,12 @@ function ensureSseConnection(): void {
     return;
   }
 
-  if (sseController || reconnectTimer || activeConnectionPromise || connectionState === "connecting") {
+  if (
+    sseController ||
+    reconnectTimer ||
+    activeConnectionPromise ||
+    connectionState === "connecting"
+  ) {
     return;
   }
 
@@ -361,13 +385,14 @@ async function startSseConnection(version: number): Promise<void> {
     }
     connectionState = "idle";
 
-    if (version !== connectionVersion || !initializedBaseUrl || watchedKeys.size === 0) {
-      return;
+    const shouldReconnect =
+      version === connectionVersion && initializedBaseUrl !== null && watchedKeys.size > 0;
+    if (shouldReconnect) {
+      const delayMs =
+        RECONNECT_DELAYS_MS[Math.min(reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)];
+      reconnectAttempt += 1;
+      scheduleSseConnection(delayMs, version);
     }
-
-    const delayMs = RECONNECT_DELAYS_MS[Math.min(reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)];
-    reconnectAttempt += 1;
-    scheduleSseConnection(delayMs, version);
   }
 }
 
@@ -542,10 +567,7 @@ function isAbortError(error: unknown): boolean {
     (typeof DOMException !== "undefined" &&
       error instanceof DOMException &&
       error.name === "AbortError") ||
-    (typeof error === "object" &&
-      error !== null &&
-      "name" in error &&
-      error.name === "AbortError")
+    (typeof error === "object" && error !== null && "name" in error && error.name === "AbortError")
   );
 }
 

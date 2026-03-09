@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "paths": {
+      "@kisinwen/gaia-client": ["../../packages/client/src/index.ts"],
+      "@kisinwen/gaia-client/*": ["../../packages/client/src/*"],
+      "@kisinwen/gaia-shared": ["../../packages/shared/src/index.ts"],
+      "@kisinwen/gaia-shared/*": ["../../packages/shared/src/*"]
+    }
+  },
+  "include": ["src"]
+}

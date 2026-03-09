@@ -61,12 +61,15 @@ jobs:
           VERSION="${{ steps.meta.outputs.version }}"
           pnpm --filter @kisinwen/gaia-shared exec npm pkg set "version=$VERSION"
           pnpm --filter @kisinwen/gaia-client exec npm pkg set "version=$VERSION"
+          pnpm --filter @kisinwen/gaia-cli exec npm pkg set "version=$VERSION"
           pnpm --filter @kisinwen/gaia-client exec npm pkg set "dependencies.@kisinwen/gaia-shared=$VERSION"
+          pnpm --filter @kisinwen/gaia-cli exec npm pkg set "dependencies.@kisinwen/gaia-client=$VERSION"
 
-      - name: Build shared and client
+      - name: Build shared, client, and cli
         run: |
           pnpm --filter @kisinwen/gaia-shared build
           pnpm --filter @kisinwen/gaia-client build
+          pnpm --filter @kisinwen/gaia-cli build
 
       - name: Publish shared
         run: pnpm --filter @kisinwen/gaia-shared publish --no-git-checks
@@ -75,5 +78,10 @@ jobs:
 
       - name: Publish client
         run: pnpm --filter @kisinwen/gaia-client publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish cli
+        run: pnpm --filter @kisinwen/gaia-cli publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
